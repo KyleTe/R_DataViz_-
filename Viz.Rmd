@@ -1,0 +1,535 @@
+---
+title: "Data Visualization Assignment 2"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+\vspace{0.25in}
+
+### Due October 18, 2020
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(tidyquant)  
+library(data.table) 
+library(readxl)
+knitr::opts_chunk$set(echo = TRUE)
+setwd("D:\\")
+lc = read_csv('LendingClub_LoanStats_2011_v2.csv')
+
+lct <- Sys.getlocale("LC_TIME"); Sys.setlocale("LC_TIME", "C")##set_locale
+
+lc$issue_date = as.Date(paste(lc$issue_d,"-01",sep=""), format="%y-%b-%d")
+dji <- read_csv('DowJones_history.csv')
+thurman.soc <- read.csv("D:\\Thurman_Social_Edgelist.csv")
+thurman.org <- read.csv("D:\\Thurman_Office_Edgelist.csv")
+```
+
+### Description
+
+This homework assignment asks you to create more polished and sophisticated graphs with your knowledge of R. 
+
+The assignment uses data from several sources. First, you will revisit the Lending Club, an online, peer-to-peer marketplace that connects borrowers and investors. Second, you will re-analyze a time series of the Dow Jones historical average that was covered in class. Third, you will analyze the relationships between office workers in terms of their reporting structure and their social relationships. 
+
+Please complete the questions below in the relevant R programming blocks. Questions 1a-2b will require you to create visualizations in ggplot(), and Questions 3a & 3b will require you to create visualizations in ggnet() or using igraph(). You should expect to do some data manipulation for many of the charts, so dplyr will come in handy but you are welcome to process the data however you choose (as long as its accurate). For each chart, we expect that you follow these guidelines (at a minimum!):
+
+1. Include an informative title.
+2. Include accurate and readable axis labels.
+3. Use color judiciously, including on the background, grid lines, labels, and bars/shapes/etc.
+4. Scale axes appropriately.
+5. Include other information (annotation, trendline, etc.) as necessary.
+
+For each 5-point visualization, points will be awarded according to the following:
+
+1 point: for using the correct data set, including processing as necessary.
+2 points: for creating an accurate and appropriate visualization.
+2 points: for creating an attractive and readable visualization.
+
+The point distribution will be doubled for the more difficult, 10-point visualizations.
+
+
+### Part 1: More Bar Charts (20 points)
+
+#### 1a. Pyramid Chart
+**Use patchwork to create a pyramid chart. Place a label for the Loan Grade in the center, and display the number of loans, organized by the purpose of the debt (group debt consolidation and credit cards together versus all other loan purposes).**  *(10 points)*
+
+HINT: Create one chart with the number of loans for debt (debt consolidation and credit cards), and create a second chart with the number of non-debt loans (all other loan purposes). Remember to change the levels of the Loan Grade factor so that A is at the top of the chart.  Use patchwork to combine the two charts.
+
+```{r question1a}
+library(ggplot2)
+library(patchwork)
+a1data <- lc %>%
+  select(grade,purpose) %>% na.omit %>%
+  group_by(grade)
+
+a1f = as.data.frame(table(a1data))
+  
+
+#create data for credit&debt
+for(i in 1:7) { 
+  namelist = c('A','B','C','D','E','F','G')
+ nam <- paste('g',namelist[i], sep = "")
+ assign(nam, 
+  a1f%>%filter(grade==namelist[i]) %>% na.omit %>%
+  select(grade,purpose,Freq) %>%
+  filter(purpose=='credit_card' | purpose=='debt_consolidation') %>%
+  pivot_wider(names_from = purpose, values_from = Freq) %>%
+  mutate(creditcard_debtconsolidation = credit_card + debt_consolidation)) 
+  
+}
+
+data_cad=((rbind(gA,gB,gC,gD,gE,gF,gG))[,c(1,4)])
+
+#create allothers
+for(i in 1:7) { 
+  namelist = c('A','B','C','D','E','F','G')
+ nam <- paste('go',namelist[i], sep = "")
+ assign(nam, 
+  a1f%>%filter(grade==namelist[i]) %>% na.omit %>%
+  select(grade,purpose,Freq) %>%
+  filter(purpose!='credit_card' | purpose!='debt_consolidation') %>%
+  pivot_wider(names_from = purpose, values_from = Freq) %>%
+  mutate(allothers = rowSums(.[2:15])))
+}
+
+data_other=((rbind(goA,goB,goC,goD,goE,goF,goG))[,c(1,16)]) %>%
+  arrange((grade))
+
+data_other$grade <- factor(data_other$grade,levels = c("G","F","E","D","C","B","A"))
+data_cad$grade <- factor(data_cad$grade,levels = c("G","F","E","D","C","B","A"))
+
+#make chart
+cad_chart <- data_cad %>% 
+  ggplot(aes(y=grade , x=-creditcard_debtconsolidation)) +
+  geom_vline(xintercept = 0) +
+  geom_col(fill="darkred") +
+  labs(x="Number of loans") +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(size = 11.5, face = "italic",hjust = 0.5),
+        panel.grid.major.x = element_line(color="grey80"),
+        panel.background = element_rect(fill="white")) +
+  scale_x_continuous(breaks=c(0,-2000,-4000,-6000),
+                     labels = c(0,2000,4000,6000))+
+  ggtitle("CC&Debt consolidation")
+  
+
+
+other_chart <- data_other %>% 
+  ggplot(aes(y=grade, x=allothers)) +
+  geom_vline(xintercept = 0) +
+  geom_col(fill="darkblue") +
+  labs(x="Number of loans") +
+  theme(axis.title.y = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(size = 11.5, face = "italic",hjust = 0.5),
+        panel.grid.major.x = element_line(color="grey80"),
+        panel.background = element_rect(fill="white"),
+        axis.text.y = element_text(hjust=0.5))+
+    scale_x_continuous(breaks=c(0,2000,4000,6000,8000,10000,12000),
+                       labels = c(0,2000,4000,6000,8000,10000,12000))+
+  ggtitle("All other purpose")
+  
+
+cad_chart + other_chart + 
+  plot_annotation(
+    title = 'Number of Loans group by loan grade and purpose',
+    caption = 'Source: Lending Club',
+    theme = theme(plot.title = element_text(size = 16))
+  )
+
+
+```
+
+
+#### 1b. Square Area Chart
+**Replicate the square area chart in the slides for Class Session 10. Make a chart that shows that "Out of every 100 phone screens, we bring 25 candidates onsite, and extend 9 offers.**  *(10 points)*
+
+HINT: You can create three grids and then add the texts on the right side. Do the best to change the color and appropriately justify the text. It will be difficult to change the font to bold in the middle of the sentence, so just make the entire text bold.
+HINT: YOu can draw a white line segment to visually distance each of the three grids.
+
+```{r question1b}
+
+x_dim=10
+y_dim=10
+x = as.vector(sapply(1:x_dim, FUN=function(x) {rep(x,y_dim)}))
+y = rep(1:y_dim, x_dim)
+
+color_x_dim=3
+color_y_dim=3
+color_x = as.vector(sapply(seq(x_dim-color_x_dim+1,x_dim,1), 
+                           FUN=function(x) {rep(x,color_x_dim)}))
+color_y = rep(1:color_y_dim, color_y_dim)
+
+large_grid_data <- tibble(x=x, y=y)
+color_data <- tibble(x=color_x, y=color_y)
+
+
+color_x_dim2=5
+color_y_dim2=5
+color_x2 = as.vector(sapply(seq(x_dim-color_x_dim2+1,x_dim,1), 
+                           FUN=function(x) {rep(x,color_x_dim2)}))
+color_y2 = rep(1:color_y_dim2, color_y_dim2)
+
+color_data2 <- tibble(x=color_x2, y=color_y2)
+
+
+whitegrid<- data.frame(x1 = 7.5, x2 = 7.5, y1 = 0.5, y2 = 3.5)
+whitegrid2<- data.frame(x1 = 7.5, x2 = 10.5, y1 = 3.5, y2 = 3.5)
+
+whitegrid3<- data.frame(x1 = 5.5, x2 = 5.5, y1 = 0.5, y2 = 5.5)
+whitegrid4<- data.frame(x1 = 5.5, x2 = 10.5, y1 = 5.5, y2 = 5.5)
+
+q2 <- ggplot() +
+  geom_tile(data=large_grid_data, 
+            aes(x=x, y=y), fill="grey80",
+            color="white", size=1) +
+     geom_tile(data=color_data2,
+            aes(x=x, y=y), fill="grey60", color="white",size=1) +
+  geom_tile(data=color_data,
+            aes(x=x, y=y), fill="#64a1b3", color="white",size=1)+
+ geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), color = "white",size=2.05, data = whitegrid)  +
+ geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), color = "white",size=2.05, data = whitegrid2) +
+ geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), color = "white",size=2.05, data = whitegrid3) +
+  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), color = "white",size=2.05, data = whitegrid4) +
+  theme(panel.background = element_blank(),
+        plot.caption = element_text(size=18, face="bold", hjust=0.5,
+                                  color="steelblue"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) 
+
+  text1 = paste("Out of every 100",
+  "\nphone screens...")
+    text2 = paste("we bring 25",
+    "\ncandidates onsite",
+    "\nfor interviews...")
+      text3 = paste("and",
+      "\nextend 9 offers.")
+data <- data.frame(x = 1:5,        
+                   y = 1:5)
+
+ggp <- ggplot(data, aes(x, y)) +    
+  geom_point(alpha=0)
+
+
+
+t1=ggp+                               
+  annotate(geom = "text",
+           x = 1, y = 4.7,
+           label = text1,
+           fontface="bold",
+           size = 5,
+           hjust = 0,color="grey73")+ 
+  theme_void() +                               
+  annotate(geom = "text",
+           x = 1, y =1.4,
+           label = text3,
+           fontface="bold",
+           size = 5,
+           hjust = 0,color="#64a1b3")+                               
+  annotate(geom = "text",
+           x = 1, y =2.6,
+           label = text2,
+           fontface="bold",
+           size = 5,
+           hjust = 0,color="grey60")
+
+q2+t1+ plot_annotation(
+    title = 'Interview Breakdown',
+    theme = theme(plot.title = element_text(size = 17, hjust=0.05,color="grey30",face="bold")))
+
+```
+
+
+### Part 2: Time Series (20 points)
+
+#### 2a. Multiple Line Chart
+**Create a line chart of the average loan amount in each of the loan grades over time. Highlight loan grade A and keep the other shades light grey.** *(5 points)*
+```{r question2a}
+library(scales)
+data_2a <- lc %>%
+  select(loan_amnt,grade,issue_date) %>% na.omit() %>%
+  group_by(issue_date,grade) %>%
+  summarise(mean_loanamnt = mean(loan_amnt,na.rm = TRUE))
+data_2a$date = data_2a$issue_date
+data_2a$issue_date = NULL
+
+a2 <- data_2a %>%
+  ggplot(aes(x = date, y=mean_loanamnt, group=grade,color=grade)) +
+  geom_line(size=.5)+
+  labs(title = "Average loan amount in each grades from 2007-2011", subtitle = "Loan Amount is increasing in each grades over time", caption = "Source: Lending Club")+
+  xlab("Date")+
+  ylab("Average Loan Amount")+
+  scale_x_date(breaks="6 month", labels=date_format("%Y-%m"))+
+scale_colour_manual(values=c("darkred","lightgrey","lightgrey","lightgrey","lightgrey","lightgrey","lightgrey"))+
+  theme(axis.text.x = element_text(face = "bold",size = 8, angle = 15),
+        axis.ticks = element_blank(),
+        plot.title = element_text(size=18, hjust=0.5),
+        panel.border = element_blank(),
+        panel.background = element_rect(fill="white"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(color="lightyellow2"),
+        panel.grid.major.x = element_line(color="lightyellow2"),
+        axis.title = element_text(face="bold"),
+        axis.line.y = element_line(color="black"),
+        plot.caption = element_text(face="italic"))
+a2
+
+```
+
+#### 2b. Area chart
+**Create an area chart showing the total number of loans for debt-related categories (credit cards and debt consolidation), versus all other types over time.** *(5 points)*
+
+```{r question2b}
+b2_data <- lc %>%
+  filter(purpose == "credit_card"| purpose=='debt_consolidation') %>%
+  select(purpose,issue_date)
+b2_data = as.data.frame(table(b2_data))
+b2_data_cd <- b2_data %>%
+  pivot_wider(names_from = purpose, values_from = Freq) %>%
+  mutate(creditcard_debtconsolidation = credit_card + debt_consolidation)
+b2_data_cd = b2_data_cd[,c(1,4)]
+
+b2_data2 <- lc %>%
+  filter(purpose != "credit_card"| purpose!='debt_consolidation') %>%
+  select(purpose,issue_date)
+b2_data2 = as.data.frame(table(b2_data2))
+
+b2_data_other <- b2_data2 %>%
+  pivot_wider(names_from = purpose, values_from = Freq) %>%
+  mutate(others = rowSums(.[2:15]))
+
+b2_data_other = b2_data_other[,c(1,16)]
+
+b2_final = cbind(b2_data_cd,b2_data_other)[,c(1,2,4)]
+b2_final<- b2_final %>%
+  pivot_longer(cols = c(creditcard_debtconsolidation, others), names_to = "Outcome") 
+    
+b2_final$issue_date = as.Date(b2_final$issue_date)
+names(b2_final)[2] <- "Purpose"
+b2 <- b2_final %>%
+  ggplot(aes(x=issue_date, y=value, group=Purpose)) +
+  geom_area(aes(fill=Purpose))
+
+#improve the chart
+b2 +
+  scale_x_date(breaks="6 month", labels=date_format("%Y-%m"))+
+  labs(title = "Total number of loans for debt and other purpose from 2007-2011", 
+       subtitle = "Number of loans is increasing over time")+
+  labs(x = "Date", y="Number of Loans",
+       caption="Source: Lending Club") +
+  geom_hline(yintercept = 0) +
+  theme(legend.position = "bottom",
+          axis.ticks = element_blank(),
+          plot.title = element_text(size=14, hjust=0.01),
+          panel.border = element_blank(),
+          panel.background = element_rect(fill="white"),
+          panel.grid.minor.y = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(color="grey93"),
+          panel.grid.major.x = element_line(color="grey97"),
+          axis.title = element_text(face="bold"),
+          axis.line.y = element_line(color="black"),
+          plot.caption = element_text(face="italic")) + 
+    scale_fill_manual(labels = c("All Others", "CC&Debt Consolidation"),
+                    values = c('cyan3', 'firebrick3'))
+
+
+
+```
+
+#### 2c. Waterfall Chart
+**Create the waterfall chart for the entire DJI data. Include a stacked bar for the afterhours trading.** *(10 points)*
+
+Data Dictionary:
+*Date*: The trading date (Monday through Friday)
+*Open*: The stock price when the market opens
+*Close*: The stock price when the market closes
+*High*: The highest stock price achieved during the day
+*Low*: The lowest stock price recorded during the day
+
+```{r question2c}
+dji <- read_csv('DowJones_history.csv')
+dji$time.x <- 1:nrow(dji)
+dji$change =  dji$Close-dji$Open
+dji$flow <- factor(sign(dji$change))
+# Calculate the coordinates of the next time period for the segments.
+dji$next.time <- lead(dji$time.x)
+dji$Date=as.Date(dji$Date, "%Y-%m-%d")
+
+dji=dji %>%
+  mutate(aft = lead(Open))%>%
+  pivot_longer(cols = c(Open,aft), names_to = "status") %>% na.omit()
+
+#set bar status(normal or after hour)
+dji = as.data.table(dji)
+dji$status2=dji$status
+#dji[status=='aft', flow := '0']
+dji[flow=='1', status := '1']
+dji[flow=='-1', status := '-1']
+
+#set bar lower bound
+dji$ymin = '0'
+#dji[ymin=='0', ymin := Low]
+dji$ymin = ifelse(dji$status=="aft", dji$Close, dji$value)
+
+
+#set bar upper bound
+dji$ymax = '0'
+#[ymax=='0', ymax := High]
+
+#make temp2 for comparing ymax and ymin for normal bar
+dji$temp2 = dji$value
+
+dji$ymax = ifelse(dji$status=="aft", dji$value, dji$Close)
+dji$ytemp =0
+dji$ytemp = ifelse(dji$status=="aft" & dji$ymax < dji$ymin, dji$ymin,0)
+dji$ymin = ifelse(dji$status=="aft" & dji$ymax < dji$ymin, dji$ymax,dji$ymin)
+dji$ymax = ifelse(dji$ytemp != '0', dji$ytemp,dji$ymax)
+
+dji$ymin = ifelse(dji$status!="aft" & dji$ymax < dji$ymin, dji$ymax,dji$ymin)
+dji$ymax = ifelse(dji$status!="aft" & dji$temp2 != dji$ymin, dji$temp2,dji$ymax)
+a925 = data.frame(as.Date("2020-09-25"),0,0,0,0,0,0,0,0,0,1,0,26694.50,27173.96,0,0,0)
+names(a925) <- c("Date","High","Low","Close","Adj Close","Volume","time.x","change", "flow","next.time","status",  
+"value","ymin","ymax","temp2" , "ytemp")    
+dji =rbind(dji,a925,fill=TRUE)
+
+dji$alpha1 <- (ifelse(dji$status2 == "aft", 0.3, 1))
+
+
+q1 <- ggplot(dji, aes(x = Date, fill = status, color = flow)) + 
+geom_rect(aes(xmin = Date - 0.25, # control bar gap width
+              xmax = Date + 0.25, 
+              ymin = ymin,
+              ymax = ymax),
+          color="black",alpha= (dji$alpha1)
+        ) +scale_x_date(breaks = date_breaks("1 month"),
+               labels = date_format("%Y/%m")) +
+  scale_fill_manual(labels = c("Down", "Up"),
+                    values = c("-1" = "darkred", "1" = "darkgreen"))+
+  theme(panel.background = element_rect(fill="white"),
+        panel.grid.major.y = element_line(color="grey80", linetype=2),
+        panel.grid.minor.y = element_line(color="grey90", linetype=3))+ 
+  labs(fill='Direction')  +
+  labs(x="Date",y="Price")+ scale_alpha(guide = 'none')+
+  labs(title = "Trading price of Dow Jones Index including afterhour", 
+       subtitle = "DJI increased 2,000 point from July to Sept.",
+       caption="Source: Yahoo! Finance")
+
+q1
+
+
+```
+
+### Part 3: Networks (10 points)
+
+#### 3a. Reporting Network 
+**Use ggnet or igraph to create the hierarchy reporting network in the Thurman office data. Label the most central person in the advice network.**  *(5 points)*
+
+HINT: Being above another node in the hierarchy should be represented by directed edges going outward to those below.
+```{r question3a}
+library(GGally)
+library(sna)
+library(network)
+# create the network with ggnet
+org <- network(thurman.org  , directed=T)
+
+#ggnet2(org)
+
+# calculate the n
+
+bc1 = betweenness(org)
+cl1 = closeness(org)
+
+# PLOT THE NETWORK
+# Label the person with the highest closeness centrality
+closeness_label <- network.vertex.names(org)[which.max(cl1)]
+closeness_color <- rep("grey70",length(cl1))
+closeness_color[which.max(cl1)] <- "royalblue"
+
+plot1 <- ggnet2(org,
+                  label=closeness_label,
+                  size=18,
+                  label.color="white",
+                  node.color= closeness_color,
+                  label.size = 2,
+                  edge.color = "grey80",
+                  arrow.size = 6,
+                  arrow.gap = 0.09,
+                  legend.position = "none") 
+
+
+plot1 +
+  labs(title="Thurman office Reporting Network",
+       subtitle = "PRESIDENT is the center of the Reporting network in the office.",
+       caption = "Source: Thurman office ") +
+  theme(panel.border = element_rect(fill=NA,color="black"),
+        plot.caption = element_text(face = "italic"))
+```
+
+```
+
+#### 3b. Social network
+**Create the social network in the Thurman data. Change the size of the nodes according to their total degree. Color the nodes varying shades of gray based on their  betweenness centrality. Specifically label the node with the highest betweenness centrality. Include the name of this most central person in the graph title.** *(5 points)*
+
+HINT: Use the grey scale to manually create the color names. Once you calculate the betweenness centrality (bc) use the following line of code to create a list of greyscale colors: bc_colors = paste("grey",100 - round(bc/ max(bc), digits=1)*60 - 15,sep=""). 
+```{r question3b}
+soc <- network(thurman.soc , directed=T)
+
+#detach(package:igraph, unload=TRUE)
+# calculate
+bc = betweenness(soc)
+cl = closeness(soc)
+attr <- read_excel("D:\\ChromeDW\\Thurman_Office_Vertices_TDLayout.xlsx")
+library(igraph) 
+socgraph <- graph.data.frame(thurman.soc, vertices=attr, directed=T)
+deg<- degree(socgraph)
+detach(package:igraph, unload=TRUE)
+# PLOT THE NETWORK
+# Label the person with the highest closeness centrality
+closeness_label <- network.vertex.names(soc)[which.max(cl)]
+closeness_color <- rep("grey70",length(cl))
+closeness_color[which.max(cl)] <- "royalblue"
+
+
+table1 = network.vertex.names(soc)
+table2 <- data.frame(matrix(ncol = 15, nrow = 0))
+colnames(table2) <- table1
+deg=data.frame(deg)
+deg2 = rbind(table2,deg)
+deg2=data.frame(t(deg2))
+deg2=deg2[,order(colnames(deg2))]
+deg2=sapply(deg2,'[[',1)
+
+bc_colors = paste("grey",100 - round(bc/ max(bc), digits=1)*60 - 15,sep="")
+
+plot2 <- ggnet2(soc,
+                  label=closeness_label,
+                  size=deg2,
+                  label.color="white",
+                  node.color= bc_colors,
+                  label.size =2.5,
+                  edge.color = "grey80",
+                  arrow.size = 2,
+                  arrow.gap = 0.03,
+                  legend.position = "none",
+                  ) 
+
+
+plot2 +
+  labs(title="Thurman office Social Network",
+       subtitle = "EMMA is the most central person in the social network",
+       caption = "Source: Thurman office study") +
+  theme(panel.border = element_rect(fill=NA,color="black"),
+        plot.caption = element_text(face = "italic"))
+
+````
+
+
+
+
